@@ -25,6 +25,10 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.S3ClientOptions;
 import org.slf4j.Logger;
 
@@ -34,8 +38,7 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 
-import static org.apache.hadoop.fs.s3a.Constants.ENDPOINT;
-import static org.apache.hadoop.fs.s3a.Constants.PATH_STYLE_ACCESS;
+import static org.apache.hadoop.fs.s3a.Constants.*;
 
 /**
  * The default {@link S3ClientFactory} implementation.
@@ -90,6 +93,9 @@ public class DefaultS3ClientFactory extends Configured
       Configuration conf)
       throws IllegalArgumentException {
     String endPoint = conf.getTrimmed(ENDPOINT, "");
+    if (endPoint.endsWith("jcloudcs.com") || endPoint.endsWith("jdcloud-oss.com")){
+      return applyS3ClientOptionsForJdCloudOss(conf, endPoint);
+    }
     if (!endPoint.isEmpty()) {
       try {
         s3.setEndpoint(endPoint);
@@ -131,5 +137,19 @@ public class DefaultS3ClientFactory extends Configured
           .build());
     }
     return s3;
+  }
+
+  private static AmazonS3 applyS3ClientOptionsForJdCloudOss(Configuration conf, String endPoint) {
+    final String accessKey = conf.getTrimmed(ACCESS_KEY, "");
+    final String secretKey = conf.getTrimmed(SECRET_KEY, "");
+    final boolean pathStyleAccess = conf.getBoolean(PATH_STYLE_ACCESS, false);
+    BasicAWSCredentials basicAWSCredentials = new BasicAWSCredentials(accessKey, secretKey);
+    return AmazonS3ClientBuilder.standard()
+            .withCredentials(new AWSStaticCredentialsProvider(basicAWSCredentials))
+            .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endPoint, null))
+            .withPathStyleAccessEnabled(pathStyleAccess)
+            .withPayloadSigningEnabled(false)
+            .disableChunkedEncoding()
+            .build();
   }
 }
